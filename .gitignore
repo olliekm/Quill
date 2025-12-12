@@ -1,0 +1,25 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+
+# Database files (test data - regenerate with seed_collector.py)
+data/test.db
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Test files (temporary testing scripts)
+test_single.py
+test_seed.py
+testing_data.py
+
+# Logs and temp files
+*.log
+*.tmp
