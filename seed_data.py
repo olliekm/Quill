@@ -2,10 +2,10 @@
 import json
 
 seeds = [
-    # 1. MISSING INDEX
+    # 1. MISSING INDEX ON AGE
     {
         "id": 1,
-        "description": "Missing index on WHERE clause",
+        "description": "Missing index on users.age filter",
         "schema": """
 CREATE TABLE users (
     id INTEGER PRIMARY KEY,
@@ -13,7 +13,7 @@ CREATE TABLE users (
     email TEXT,
     age INTEGER,
     city TEXT,
-    created_at TEXT
+    signup_date TEXT
 );
 """,
         "slow_query": "SELECT * FROM users WHERE age > 30;",
@@ -21,47 +21,52 @@ CREATE TABLE users (
 CREATE INDEX IF NOT EXISTS idx_users_age ON users(age);
 SELECT * FROM users WHERE age > 30;
 """,
-        "explanation": "Added index on age column for faster filtering",
+        "explanation": "Index on age column speeds up WHERE filtering",
         "optimization_type": "indexing"
     },
     
-    # 2. SELECT *
+    # 2. SELECT * OPTIMIZATION
     {
         "id": 2,
-        "description": "SELECT * wastes I/O bandwidth",
+        "description": "SELECT * when only few columns needed",
         "schema": """
-CREATE TABLE products (
+CREATE TABLE users (
     id INTEGER PRIMARY KEY,
     name TEXT,
-    description TEXT,
-    price REAL,
-    category TEXT,
-    stock INTEGER,
-    warehouse_location TEXT,
-    supplier_info TEXT
+    email TEXT,
+    age INTEGER,
+    city TEXT,
+    signup_date TEXT
 );
 """,
-        "slow_query": "SELECT * FROM products WHERE category = 'electronics';",
-        "fast_query": "SELECT id, name, price, stock FROM products WHERE category = 'electronics';",
-        "explanation": "Only select columns you need to reduce I/O",
+        "slow_query": "SELECT * FROM users WHERE city = 'NYC';",
+        "fast_query": """
+CREATE INDEX IF NOT EXISTS idx_users_city ON users(city);
+SELECT id, name, email FROM users WHERE city = 'NYC';
+""",
+        "explanation": "Select only needed columns and add index",
         "optimization_type": "projection"
     },
     
     # 3. SUBQUERY TO JOIN
     {
         "id": 3,
-        "description": "IN subquery can be replaced with JOIN",
+        "description": "IN subquery for finding users with orders",
         "schema": """
-CREATE TABLE orders (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER,
-    amount REAL,
-    status TEXT
-);
 CREATE TABLE users (
     id INTEGER PRIMARY KEY,
     name TEXT,
-    email TEXT
+    email TEXT,
+    age INTEGER,
+    city TEXT,
+    signup_date TEXT
+);
+CREATE TABLE orders (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    product TEXT,
+    amount REAL,
+    order_date TEXT
 );
 """,
         "slow_query": """
@@ -69,168 +74,206 @@ SELECT name, email FROM users
 WHERE id IN (SELECT user_id FROM orders WHERE amount > 100);
 """,
         "fast_query": """
+CREATE INDEX IF NOT EXISTS idx_orders_amount ON orders(amount);
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 SELECT DISTINCT u.name, u.email 
 FROM users u 
 INNER JOIN orders o ON u.id = o.user_id 
 WHERE o.amount > 100;
 """,
-        "explanation": "JOIN is more efficient than IN with subquery",
+        "explanation": "JOIN with indexes faster than IN subquery",
         "optimization_type": "join"
     },
     
-    # 4. NO LIMIT
+    # 4. MISSING LIMIT ON ORDERS
     {
         "id": 4,
-        "description": "Missing LIMIT on large table scan",
+        "description": "Scanning all orders without LIMIT",
         "schema": """
-CREATE TABLE logs (
+CREATE TABLE orders (
     id INTEGER PRIMARY KEY,
-    timestamp TEXT,
-    level TEXT,
-    message TEXT,
-    user_id INTEGER
+    user_id INTEGER,
+    product TEXT,
+    amount REAL,
+    order_date TEXT
 );
 """,
-        "slow_query": "SELECT * FROM logs ORDER BY timestamp DESC;",
-        "fast_query": "SELECT * FROM logs ORDER BY timestamp DESC LIMIT 100;",
-        "explanation": "Add LIMIT when you don't need all rows",
+        "slow_query": "SELECT * FROM orders ORDER BY order_date DESC;",
+        "fast_query": """
+CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(order_date DESC);
+SELECT * FROM orders ORDER BY order_date DESC LIMIT 100;
+""",
+        "explanation": "Add LIMIT and index for ordered results",
         "optimization_type": "limit"
     },
     
-    # 5. MULTIPLE OR TO IN
+    # 5. MULTIPLE OR ON CITY
     {
         "id": 5,
-        "description": "Multiple OR conditions inefficient",
-        "schema": """
-CREATE TABLE products (
-    id INTEGER PRIMARY KEY,
-    category TEXT,
-    price REAL,
-    name TEXT
-);
-""",
-        "slow_query": """
-SELECT * FROM products 
-WHERE category = 'electronics' 
-   OR category = 'computers' 
-   OR category = 'phones';
-""",
-        "fast_query": """
-CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
-SELECT * FROM products 
-WHERE category IN ('electronics', 'computers', 'phones');
-""",
-        "explanation": "Use IN instead of multiple ORs and add index",
-        "optimization_type": "indexing"
-    },
-    
-    # 6. COMPOSITE INDEX
-    {
-        "id": 6,
-        "description": "Missing composite index for multi-column filter",
-        "schema": """
-CREATE TABLE orders (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER,
-    status TEXT,
-    created_at TEXT,
-    amount REAL
-);
-""",
-        "slow_query": """
-SELECT * FROM orders 
-WHERE user_id = 123 AND status = 'pending';
-""",
-        "fast_query": """
-CREATE INDEX IF NOT EXISTS idx_orders_user_status ON orders(user_id, status);
-SELECT * FROM orders 
-WHERE user_id = 123 AND status = 'pending';
-""",
-        "explanation": "Composite index for multiple WHERE conditions",
-        "optimization_type": "indexing"
-    },
-    
-    # 7. FUNCTION IN WHERE
-    {
-        "id": 7,
-        "description": "Function call in WHERE prevents index usage",
+        "description": "Multiple OR conditions on city",
         "schema": """
 CREATE TABLE users (
     id INTEGER PRIMARY KEY,
-    email TEXT,
     name TEXT,
-    created_at TEXT
+    email TEXT,
+    age INTEGER,
+    city TEXT,
+    signup_date TEXT
 );
 """,
         "slow_query": """
 SELECT * FROM users 
-WHERE LOWER(email) = 'test@example.com';
+WHERE city = 'NYC' OR city = 'LA' OR city = 'Chicago';
 """,
         "fast_query": """
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_city ON users(city);
 SELECT * FROM users 
-WHERE email = 'test@example.com';
+WHERE city IN ('NYC', 'LA', 'Chicago');
 """,
-        "explanation": "Avoid functions in WHERE clause; store normalized data",
+        "explanation": "IN clause with index faster than multiple ORs",
         "optimization_type": "indexing"
     },
     
-    # 8. COUNT(*) VS EXISTS
+    # 6. COMPOSITE INDEX FOR ORDERS
     {
-        "id": 8,
-        "description": "COUNT when you only need to check existence",
+        "id": 6,
+        "description": "Filter on user_id and amount without index",
         "schema": """
 CREATE TABLE orders (
     id INTEGER PRIMARY KEY,
     user_id INTEGER,
-    amount REAL
+    product TEXT,
+    amount REAL,
+    order_date TEXT
 );
 """,
         "slow_query": """
-SELECT user_id, 
-       (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) as order_count
-FROM users u
-WHERE (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) > 0;
+SELECT * FROM orders 
+WHERE user_id = 123 AND amount > 50;
 """,
         "fast_query": """
-SELECT u.user_id, COUNT(o.id) as order_count
+CREATE INDEX IF NOT EXISTS idx_orders_user_amount ON orders(user_id, amount);
+SELECT * FROM orders 
+WHERE user_id = 123 AND amount > 50;
+""",
+        "explanation": "Composite index on both filter columns",
+        "optimization_type": "indexing"
+    },
+    
+    # 7. COUNT VS EXISTS
+    {
+        "id": 7,
+        "description": "Using COUNT when only need existence check",
+        "schema": """
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    email TEXT,
+    age INTEGER,
+    city TEXT,
+    signup_date TEXT
+);
+CREATE TABLE orders (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    product TEXT,
+    amount REAL,
+    order_date TEXT
+);
+""",
+        "slow_query": """
+SELECT u.name, 
+       (SELECT COUNT(*) FROM orders WHERE user_id = u.id) as order_count
+FROM users u
+WHERE (SELECT COUNT(*) FROM orders WHERE user_id = u.id) > 0;
+""",
+        "fast_query": """
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+SELECT u.name, COUNT(o.id) as order_count
 FROM users u
 INNER JOIN orders o ON u.id = o.user_id
-GROUP BY u.user_id;
+GROUP BY u.id, u.name;
 """,
-        "explanation": "Use JOIN and GROUP BY instead of correlated subqueries",
+        "explanation": "JOIN with GROUP BY faster than correlated subqueries",
         "optimization_type": "join"
     },
     
-    # 9. DISTINCT UNNECESSARY
+    # 8. ORDER BY WITHOUT INDEX
     {
-        "id": 9,
-        "description": "DISTINCT when not needed",
+        "id": 8,
+        "description": "ORDER BY age without supporting index",
         "schema": """
 CREATE TABLE users (
     id INTEGER PRIMARY KEY,
     name TEXT,
-    email TEXT UNIQUE
+    email TEXT,
+    age INTEGER,
+    city TEXT,
+    signup_date TEXT
 );
 """,
-        "slow_query": "SELECT DISTINCT email FROM users;",
-        "fast_query": "SELECT email FROM users;",
-        "explanation": "DISTINCT is unnecessary when column is UNIQUE",
-        "optimization_type": "redundancy"
+        "slow_query": """
+SELECT name, email FROM users 
+WHERE city = 'NYC' 
+ORDER BY age DESC;
+""",
+        "fast_query": """
+CREATE INDEX IF NOT EXISTS idx_users_city_age ON users(city, age DESC);
+SELECT name, email FROM users 
+WHERE city = 'NYC' 
+ORDER BY age DESC;
+""",
+        "explanation": "Composite index covering WHERE and ORDER BY",
+        "optimization_type": "indexing"
+    },
+    
+    # 9. AGGREGATION WITHOUT INDEX
+    {
+        "id": 9,
+        "description": "GROUP BY product without index",
+        "schema": """
+CREATE TABLE orders (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    product TEXT,
+    amount REAL,
+    order_date TEXT
+);
+""",
+        "slow_query": """
+SELECT product, SUM(amount) as total_sales
+FROM orders
+GROUP BY product;
+""",
+        "fast_query": """
+CREATE INDEX IF NOT EXISTS idx_orders_product ON orders(product);
+SELECT product, SUM(amount) as total_sales
+FROM orders
+GROUP BY product;
+""",
+        "explanation": "Index on GROUP BY column speeds up aggregation",
+        "optimization_type": "indexing"
     },
     
     # 10. NOT IN VS LEFT JOIN
     {
         "id": 10,
-        "description": "NOT IN can be slow on large tables",
+        "description": "Find users without orders using NOT IN",
         "schema": """
 CREATE TABLE users (
     id INTEGER PRIMARY KEY,
-    name TEXT
+    name TEXT,
+    email TEXT,
+    age INTEGER,
+    city TEXT,
+    signup_date TEXT
 );
 CREATE TABLE orders (
     id INTEGER PRIMARY KEY,
-    user_id INTEGER
+    user_id INTEGER,
+    product TEXT,
+    amount REAL,
+    order_date TEXT
 );
 """,
         "slow_query": """
@@ -238,6 +281,7 @@ SELECT * FROM users
 WHERE id NOT IN (SELECT user_id FROM orders);
 """,
         "fast_query": """
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 SELECT u.* FROM users u
 LEFT JOIN orders o ON u.id = o.user_id
 WHERE o.user_id IS NULL;
@@ -246,222 +290,92 @@ WHERE o.user_id IS NULL;
         "optimization_type": "join"
     },
     
-    # 11. ORDER BY WITHOUT INDEX
+    # 11. DATE RANGE WITHOUT INDEX
     {
         "id": 11,
-        "description": "ORDER BY without supporting index",
+        "description": "Date range query without index",
         "schema": """
-CREATE TABLE products (
+CREATE TABLE orders (
     id INTEGER PRIMARY KEY,
-    name TEXT,
-    price REAL,
-    created_at TEXT
+    user_id INTEGER,
+    product TEXT,
+    amount REAL,
+    order_date TEXT
 );
 """,
         "slow_query": """
-SELECT * FROM products 
-WHERE price > 50 
-ORDER BY created_at DESC;
+SELECT * FROM orders 
+WHERE order_date >= '2024-01-01' AND order_date < '2024-02-01';
 """,
         "fast_query": """
-CREATE INDEX IF NOT EXISTS idx_products_price_created ON products(price, created_at DESC);
-SELECT * FROM products 
-WHERE price > 50 
-ORDER BY created_at DESC;
+CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(order_date);
+SELECT * FROM orders 
+WHERE order_date >= '2024-01-01' AND order_date < '2024-02-01';
 """,
-        "explanation": "Composite index covering both WHERE and ORDER BY",
+        "explanation": "Index on date column for range queries",
         "optimization_type": "indexing"
     },
     
-    # 12. LIKE WITH LEADING WILDCARD
+    # 12. CORRELATED SUBQUERY
     {
         "id": 12,
-        "description": "LIKE with leading wildcard prevents index use",
-        "schema": """
-CREATE TABLE products (
-    id INTEGER PRIMARY KEY,
-    name TEXT,
-    sku TEXT
-);
-""",
-        "slow_query": """
-SELECT * FROM products 
-WHERE name LIKE '%laptop%';
-""",
-        "fast_query": """
-CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
-SELECT * FROM products 
-WHERE name LIKE 'laptop%';
-""",
-        "explanation": "Avoid leading wildcards; use trailing wildcard with index",
-        "optimization_type": "indexing"
-    },
-    
-    # 13. UNNECESSARY SORTING
-    {
-        "id": 13,
-        "description": "Sorting when order doesn't matter",
+        "description": "Correlated subquery for total order amount",
         "schema": """
 CREATE TABLE users (
     id INTEGER PRIMARY KEY,
     name TEXT,
     email TEXT,
-    score INTEGER
+    age INTEGER,
+    city TEXT,
+    signup_date TEXT
+);
+CREATE TABLE orders (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    product TEXT,
+    amount REAL,
+    order_date TEXT
 );
 """,
         "slow_query": """
-SELECT name, email FROM users 
-WHERE score > 100 
-ORDER BY name;
+SELECT 
+    name,
+    (SELECT SUM(amount) FROM orders WHERE user_id = u.id) as total_spent
+FROM users u;
 """,
         "fast_query": """
-CREATE INDEX IF NOT EXISTS idx_users_score ON users(score);
-SELECT name, email FROM users 
-WHERE score > 100;
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+SELECT 
+    u.name,
+    COALESCE(SUM(o.amount), 0) as total_spent
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+GROUP BY u.id, u.name;
 """,
-        "explanation": "Remove ORDER BY if ordering isn't required",
-        "optimization_type": "redundancy"
+        "explanation": "Replace correlated subquery with JOIN and aggregation",
+        "optimization_type": "join"
     },
     
-    # 14. INEFFICIENT JOIN ORDER
+    # 13. INEFFICIENT PAGINATION
     {
-        "id": 14,
-        "description": "Large table joined first",
+        "id": 13,
+        "description": "Large OFFSET for pagination",
         "schema": """
 CREATE TABLE orders (
     id INTEGER PRIMARY KEY,
     user_id INTEGER,
-    amount REAL
-);
-CREATE TABLE users (
-    id INTEGER PRIMARY KEY,
-    name TEXT,
-    active INTEGER
-);
-""",
-        "slow_query": """
-SELECT o.* FROM orders o
-JOIN users u ON o.user_id = u.id
-WHERE u.active = 1;
-""",
-        "fast_query": """
-CREATE INDEX IF NOT EXISTS idx_users_active ON users(active);
-CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
-SELECT o.* FROM users u
-JOIN orders o ON u.id = o.user_id
-WHERE u.active = 1;
-""",
-        "explanation": "Filter smaller table first, add indexes",
-        "optimization_type": "indexing"
-    },
-    
-    # 15. AGGREGATION WITHOUT INDEX
-    {
-        "id": 15,
-        "description": "GROUP BY without index",
-        "schema": """
-CREATE TABLE sales (
-    id INTEGER PRIMARY KEY,
-    product_id INTEGER,
+    product TEXT,
     amount REAL,
-    sale_date TEXT
+    order_date TEXT
 );
 """,
         "slow_query": """
-SELECT product_id, SUM(amount) as total
-FROM sales
-GROUP BY product_id;
-""",
-        "fast_query": """
-CREATE INDEX IF NOT EXISTS idx_sales_product ON sales(product_id);
-SELECT product_id, SUM(amount) as total
-FROM sales
-GROUP BY product_id;
-""",
-        "explanation": "Index on GROUP BY column speeds up aggregation",
-        "optimization_type": "indexing"
-    },
-    
-    # 16. UNION VS UNION ALL
-    {
-        "id": 16,
-        "description": "UNION when duplicates don't matter",
-        "schema": """
-CREATE TABLE active_users (
-    id INTEGER PRIMARY KEY,
-    name TEXT
-);
-CREATE TABLE inactive_users (
-    id INTEGER PRIMARY KEY,
-    name TEXT
-);
-""",
-        "slow_query": """
-SELECT name FROM active_users
-UNION
-SELECT name FROM inactive_users;
-""",
-        "fast_query": """
-SELECT name FROM active_users
-UNION ALL
-SELECT name FROM inactive_users;
-""",
-        "explanation": "UNION ALL is faster when you don't need to remove duplicates",
-        "optimization_type": "redundancy"
-    },
-    
-    # 17. CORRELATED SUBQUERY
-    {
-        "id": 17,
-        "description": "Correlated subquery in SELECT",
-        "schema": """
-CREATE TABLE customers (
-    id INTEGER PRIMARY KEY,
-    name TEXT
-);
-CREATE TABLE orders (
-    id INTEGER PRIMARY KEY,
-    customer_id INTEGER,
-    total REAL
-);
-""",
-        "slow_query": """
-SELECT 
-    c.name,
-    (SELECT SUM(total) FROM orders WHERE customer_id = c.id) as total_spent
-FROM customers c;
-""",
-        "fast_query": """
-SELECT 
-    c.name,
-    COALESCE(SUM(o.total), 0) as total_spent
-FROM customers c
-LEFT JOIN orders o ON c.id = o.customer_id
-GROUP BY c.id, c.name;
-""",
-        "explanation": "Replace correlated subquery with JOIN",
-        "optimization_type": "join"
-    },
-    
-    # 18. OFFSET PAGINATION
-    {
-        "id": 18,
-        "description": "OFFSET pagination on large dataset",
-        "schema": """
-CREATE TABLE posts (
-    id INTEGER PRIMARY KEY,
-    title TEXT,
-    created_at TEXT
-);
-""",
-        "slow_query": """
-SELECT * FROM posts 
+SELECT * FROM orders 
 ORDER BY id 
 LIMIT 20 OFFSET 10000;
 """,
         "fast_query": """
-CREATE INDEX IF NOT EXISTS idx_posts_id ON posts(id);
-SELECT * FROM posts 
+SELECT * FROM orders 
 WHERE id > 10000 
 ORDER BY id 
 LIMIT 20;
@@ -470,62 +384,243 @@ LIMIT 20;
         "optimization_type": "indexing"
     },
     
-    # 19. CASE IN WHERE
+    # 14. FILTER BEFORE JOIN
     {
-        "id": 19,
-        "description": "CASE statement in WHERE clause",
+        "id": 14,
+        "description": "Join large tables without pre-filtering",
         "schema": """
-CREATE TABLE products (
+CREATE TABLE users (
     id INTEGER PRIMARY KEY,
-    category TEXT,
-    price REAL,
-    discount_price REAL
+    name TEXT,
+    email TEXT,
+    age INTEGER,
+    city TEXT,
+    signup_date TEXT
+);
+CREATE TABLE orders (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    product TEXT,
+    amount REAL,
+    order_date TEXT
 );
 """,
         "slow_query": """
-SELECT * FROM products
-WHERE CASE 
-    WHEN discount_price IS NOT NULL THEN discount_price 
-    ELSE price 
-END < 50;
+SELECT o.* FROM orders o
+JOIN users u ON o.user_id = u.id
+WHERE u.city = 'NYC';
 """,
         "fast_query": """
-CREATE INDEX IF NOT EXISTS idx_products_price ON products(price);
-CREATE INDEX IF NOT EXISTS idx_products_discount ON products(discount_price);
-SELECT * FROM products
-WHERE (discount_price IS NOT NULL AND discount_price < 50)
-   OR (discount_price IS NULL AND price < 50);
+CREATE INDEX IF NOT EXISTS idx_users_city ON users(city);
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+SELECT o.* FROM users u
+JOIN orders o ON u.id = o.user_id
+WHERE u.city = 'NYC';
 """,
-        "explanation": "Expand CASE to separate conditions for index usage",
+        "explanation": "Add indexes and filter smaller table first",
         "optimization_type": "indexing"
     },
     
-    # 20. HAVING INSTEAD OF WHERE
+    # 15. HAVING VS WHERE
     {
-        "id": 20,
-        "description": "Using HAVING when WHERE would work",
+        "id": 15,
+        "description": "Using HAVING when WHERE would filter earlier",
         "schema": """
 CREATE TABLE orders (
     id INTEGER PRIMARY KEY,
     user_id INTEGER,
-    status TEXT,
-    amount REAL
+    product TEXT,
+    amount REAL,
+    order_date TEXT
 );
 """,
         "slow_query": """
 SELECT user_id, COUNT(*) as order_count
 FROM orders
 GROUP BY user_id
-HAVING status = 'completed';
+HAVING amount > 100;
 """,
         "fast_query": """
-CREATE INDEX IF NOT EXISTS idx_orders_status_user ON orders(status, user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_amount_user ON orders(amount, user_id);
 SELECT user_id, COUNT(*) as order_count
 FROM orders
-WHERE status = 'completed'
+WHERE amount > 100
 GROUP BY user_id;
 """,
-        "explanation": "Use WHERE to filter before grouping, not HAVING",
+        "explanation": "Use WHERE to filter before GROUP BY, not HAVING",
+        "optimization_type": "indexing"
+    },
+    
+    # 16. MULTIPLE AGGREGATIONS
+    {
+        "id": 16,
+        "description": "Multiple aggregations with separate scans",
+        "schema": """
+CREATE TABLE orders (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    product TEXT,
+    amount REAL,
+    order_date TEXT
+);
+""",
+        "slow_query": """
+SELECT 
+    user_id,
+    (SELECT COUNT(*) FROM orders o1 WHERE o1.user_id = o.user_id) as order_count,
+    (SELECT SUM(amount) FROM orders o2 WHERE o2.user_id = o.user_id) as total_amount
+FROM orders o
+GROUP BY user_id;
+""",
+        "fast_query": """
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+SELECT 
+    user_id,
+    COUNT(*) as order_count,
+    SUM(amount) as total_amount
+FROM orders
+GROUP BY user_id;
+""",
+        "explanation": "Single GROUP BY faster than multiple subqueries",
+        "optimization_type": "join"
+    },
+    
+    # 17. FILTER ON COMPUTED COLUMN
+    {
+        "id": 17,
+        "description": "Filter on computed age range",
+        "schema": """
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    email TEXT,
+    age INTEGER,
+    city TEXT,
+    signup_date TEXT
+);
+""",
+        "slow_query": """
+SELECT * FROM users 
+WHERE age / 10 = 3;
+""",
+        "fast_query": """
+CREATE INDEX IF NOT EXISTS idx_users_age ON users(age);
+SELECT * FROM users 
+WHERE age >= 30 AND age < 40;
+""",
+        "explanation": "Avoid functions in WHERE; use range with index",
+        "optimization_type": "indexing"
+    },
+    
+    # 18. HIGH-VALUE ORDERS BY CITY
+    {
+        "id": 18,
+        "description": "Find high-value orders by city without indexes",
+        "schema": """
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    email TEXT,
+    age INTEGER,
+    city TEXT,
+    signup_date TEXT
+);
+CREATE TABLE orders (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    product TEXT,
+    amount REAL,
+    order_date TEXT
+);
+""",
+        "slow_query": """
+SELECT u.city, o.amount, o.product
+FROM users u
+JOIN orders o ON u.id = o.user_id
+WHERE o.amount > 500
+ORDER BY u.city, o.amount DESC;
+""",
+        "fast_query": """
+CREATE INDEX IF NOT EXISTS idx_orders_amount ON orders(amount);
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_users_city ON users(city);
+SELECT u.city, o.amount, o.product
+FROM orders o
+JOIN users u ON o.user_id = u.id
+WHERE o.amount > 500
+ORDER BY u.city, o.amount DESC;
+""",
+        "explanation": "Add indexes on all join and filter columns",
+        "optimization_type": "indexing"
+    },
+    
+    # 19. RECENT USERS WITHOUT INDEX
+    {
+        "id": 19,
+        "description": "Find recent signups without date index",
+        "schema": """
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    email TEXT,
+    age INTEGER,
+    city TEXT,
+    signup_date TEXT
+);
+""",
+        "slow_query": """
+SELECT name, email, signup_date FROM users 
+WHERE signup_date >= '2024-01-01'
+ORDER BY signup_date DESC;
+""",
+        "fast_query": """
+CREATE INDEX IF NOT EXISTS idx_users_signup ON users(signup_date DESC);
+SELECT name, email, signup_date FROM users 
+WHERE signup_date >= '2024-01-01'
+ORDER BY signup_date DESC;
+""",
+        "explanation": "Index on signup_date for filtering and sorting",
+        "optimization_type": "indexing"
+    },
+    
+    # 20. TOP SPENDERS
+    {
+        "id": 20,
+        "description": "Find top spenders without optimization",
+        "schema": """
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    email TEXT,
+    age INTEGER,
+    city TEXT,
+    signup_date TEXT
+);
+CREATE TABLE orders (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    product TEXT,
+    amount REAL,
+    order_date TEXT
+);
+""",
+        "slow_query": """
+SELECT u.name, u.email, SUM(o.amount) as total
+FROM users u
+JOIN orders o ON u.id = o.user_id
+GROUP BY u.id, u.name, u.email
+ORDER BY total DESC;
+""",
+        "fast_query": """
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+SELECT u.name, u.email, SUM(o.amount) as total
+FROM users u
+JOIN orders o ON u.id = o.user_id
+GROUP BY u.id, u.name, u.email
+ORDER BY total DESC
+LIMIT 100;
+""",
+        "explanation": "Add index and LIMIT for top-N query",
         "optimization_type": "indexing"
     }
 ]
@@ -534,8 +629,8 @@ GROUP BY user_id;
 with open('data/seed_data.json', 'w') as f:
     json.dump(seeds, f, indent=2)
 
-print(f"✅ Created {len(seeds)} seed examples")
-print("\nOptimization types:")
+print(f"✅ Created {len(seeds)} seed examples for your test database")
+print("\nOptimization breakdown:")
 types = {}
 for seed in seeds:
     opt_type = seed['optimization_type']
@@ -543,3 +638,7 @@ for seed in seeds:
 
 for opt_type, count in sorted(types.items()):
     print(f"  - {opt_type}: {count}")
+
+print("\nColumns used:")
+print("  Users: id, name, email, age, city, signup_date")
+print("  Orders: id, user_id, product, amount, order_date")
