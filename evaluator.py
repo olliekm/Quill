@@ -5,8 +5,14 @@ from pathlib import Path
 import json
 
 class SQLEvaluator:
-    def __init__(self, test_db_path="data/test.db"):
+    def __init__(self, test_db_path="data/test.db", use_readability_judge=False):
         self.test_db_path = test_db_path
+        self.use_readability_judge = use_readability_judge
+        self.readability_judge = None
+
+        if use_readability_judge:
+            from llm_judge import SQLReadabilityJudge
+            self.readability_judge = SQLReadabilityJudge()
 
     def evaluate_query(self,
                        schema: str,
@@ -49,16 +55,38 @@ class SQLEvaluator:
             else:
                 speedup = original_time / optimized_time
 
-            if speedup >= 1.1:  # At least 10% faster
-                reward = min(speedup / 10.0, 1.0)  # Normalize to 0-1
-            elif speedup > 0.95:  # Similar performance is ok
+            if speedup >= 1.1:
+                reward = min(speedup / 10.0, 1.0)
+            elif speedup > 0.95:
                 reward = 0.5
-            else:  # Slower = bad
+            else:
                 reward = 0
-            
+
+            readability_bonus = 0.0
+            readability_preference = None
+            readability_reasoning = None
+
+            if self.use_readability_judge and self.readability_judge:
+                try:
+                    judge_result = self.readability_judge.judge_readability(
+                        query_a=original_query,
+                        query_b=optimized_query,
+                        schema=schema
+                    )
+                    readability_preference = judge_result.get("preference")
+                    readability_reasoning = judge_result.get("reasoning")
+                    confidence = judge_result.get("confidence", "medium")
+                    readability_bonus = self.readability_judge.calculate_readability_bonus(
+                        readability_preference,
+                        confidence
+                    )
+                    reward = max(0, min(1.0, reward + readability_bonus))
+                except Exception as e:
+                    print(f"Readability judge error: {e}")
+
             conn.close()
 
-            return {
+            result = {
                 "success": True,
                 "reward": reward,
                 "original_time": original_time,
@@ -67,6 +95,13 @@ class SQLEvaluator:
                 "results_match": not original_timed_out,
                 "original_timed_out": original_timed_out
             }
+
+            if self.use_readability_judge:
+                result["readability_preference"] = readability_preference
+                result["readability_reasoning"] = readability_reasoning
+                result["readability_bonus"] = readability_bonus
+
+            return result
         except Exception as e:
             return {"success": False, "reward": 0, "error": str(e)}
         finally:
