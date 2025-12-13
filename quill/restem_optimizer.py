@@ -5,7 +5,7 @@ Self-improving loop: Generate → Evaluate → Filter → Add to training set �
 
 import json
 from typing import List, Dict
-from evaluator import SQLEvaluator
+from quill.evaluator import SQLEvaluator
 
 
 class ReSTEMOptimizer:

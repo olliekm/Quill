@@ -11,7 +11,7 @@ class SQLEvaluator:
         self.readability_judge = None
 
         if use_readability_judge:
-            from llm_judge import SQLReadabilityJudge
+            from quill.llm_judge import SQLReadabilityJudge
             self.readability_judge = SQLReadabilityJudge()
 
     def evaluate_query(self,

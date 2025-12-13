@@ -3,7 +3,7 @@ Example: Using SQL Evaluator with Readability Judging
 """
 
 import json
-from evaluator import SQLEvaluator
+from quill.evaluator import SQLEvaluator
 
 # Example 1: Without readability judging (speed only)
 print("="*70)

@@ -1,5 +1,5 @@
 import json
-from evaluator import SQLEvaluator
+from quill.evaluator import SQLEvaluator
 
 # Load seed data
 with open('data/seed_data.json', 'r') as f:
