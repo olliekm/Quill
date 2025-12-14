@@ -4,12 +4,18 @@ Uses preference comparison: which query is more readable?
 """
 
 import os
+import json
+from openai import OpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class SQLReadabilityJudge:
-    def __init__(self, model="gpt-4", api_key=None):
+    def __init__(self, model="gpt-4o-mini", api_key=None):
         self.model = model
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.client = OpenAI(api_key=self.api_key)
 
     def judge_readability(self, query_a: str, query_b: str, schema: str = "") -> dict:
         """
@@ -19,19 +25,23 @@ class SQLReadabilityJudge:
             {
                 "preference": "A" | "B" | "tie",
                 "reasoning": str,
-                "readability_bonus": float  # 0.0 to 0.2
+                "confidence": "high" | "medium" | "low"
             }
         """
         prompt = self._build_prompt(query_a, query_b, schema)
 
-        # TODO: Add your LLM API call here
-        # For OpenAI:
-        # response = openai.ChatCompletion.create(...)
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": "You are an expert SQL code reviewer."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
 
-        # For Anthropic:
-        # response = anthropic.Completion.create(...)
-
-        raise NotImplementedError("Add your LLM API integration here")
+        result = json.loads(response.choices[0].message.content)
+        return result
 
     def _build_prompt(self, query_a: str, query_b: str, schema: str) -> str:
         """Build the evaluation prompt for the LLM"""
