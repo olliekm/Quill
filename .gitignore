@@ -12,6 +12,16 @@ env/
 # Database files (test data - regenerate with seed_collector.py)
 data/test.db
 
+# Generated training data (all stages)
+data/stage1/
+data/stage2/
+data/combined/
+data/augmented_training.json
+data/restem_training_data.json
+data/training_metrics.json
+data/checkpoint_*.json
+data/finetuning_dataset.jsonl
+
 # IDE
 .vscode/
 .idea/
