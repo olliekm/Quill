@@ -16,7 +16,7 @@ load_dotenv()
 
 class ReSTEMOptimizerV2:
     def __init__(self, test_db_path="data/test.db", seed_data_path="data/seed_data.json",
-                 reward_threshold=0.5, model="gpt-4o-mini"):
+                 reward_threshold=0.25, model="gpt-4o-mini"):
         self.evaluator = SQLEvaluator(test_db_path=test_db_path)
         self.seed_data_path = seed_data_path
         self.reward_threshold = reward_threshold
@@ -48,25 +48,33 @@ Schema: {ex['schema']}
 Slow Query: {ex['slow_query']}
 """
 
-        prompt = f"""You are generating slow, unoptimized SQL queries for performance testing.
+        prompt = f"""You are a junior developer writing SQL queries for a production application. You understand SQL basics but haven't learned about performance optimization yet.
 
-Learn from these example patterns of slow queries:
+Here are some queries written by other junior developers:
 
 {examples_text}
 
-Now generate a NEW slow query for this schema:
+Now write a query for this schema to solve a real business need:
 
 Schema:
 {schema}
 
-Requirements:
-1. Query should be semantically valid and realistic
-2. Query should have performance issues (missing indexes, inefficient patterns)
-3. Use different WHERE conditions, JOIN patterns, or aggregations than the examples
-4. Be creative with combinations of filters, sorting, grouping
-5. Return ONLY the SQL query, nothing else
+Task: Write a query that solves one of these realistic use cases:
+- Find users who match certain criteria (age, location, signup date)
+- Get users with their order statistics (count, total amount, recent orders)
+- Filter users based on their order history
+- Find active users (those who have placed orders)
+- Get user profiles with aggregated data
 
-Generate a slow query:"""
+Guidelines for writing the query:
+1. Write working SQL that solves the business problem
+2. Use patterns you'd naturally think of: subqueries, IN clauses, SELECT *
+3. Focus on getting correct results, not performance
+4. Don't overthink - write the first solution that comes to mind
+5. Avoid obviously broken patterns (N+1 queries, cartesian products without purpose)
+6. Return ONLY the SQL query, no explanation
+
+Write a query:"""
 
         response = self.client.chat.completions.create(
             model=self.model,
