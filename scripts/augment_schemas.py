@@ -9,15 +9,27 @@ from typing import Dict, List
 
 # Schema name mappings (4 variations per table)
 SCHEMA_VARIANTS = {
-    'users': ['customers', 'employees', 'members'],
-    'orders': ['purchases', 'transactions', 'sales']
+    # E-commerce
+    'users': ['customers', 'accounts', 'members'],
+    'orders': ['purchases', 'transactions', 'sales'],
+    # Social network
+    'posts': ['articles', 'messages', 'updates'],
+    'comments': ['replies', 'responses', 'feedback'],
+    # HR system
+    'employees': ['staff', 'workers', 'personnel'],
+    # Analytics
+    'events': ['activities', 'actions', 'logs'],
+    # Content platform
+    'articles': ['documents', 'content', 'publications'],
+    'tags': ['categories', 'labels', 'topics'],
+    'article_tags': ['document_categories', 'content_labels', 'publication_topics']
 }
 
 COLUMN_VARIANTS = {
     'users': {
-        'age': ['customer_age', 'employee_age', 'member_age'],
-        'city': ['location', 'department', 'region'],
-        'email': ['contact_email', 'work_email', 'user_email'],
+        'age': ['customer_age', 'account_age', 'member_age'],
+        'city': ['location', 'area', 'region'],
+        'email': ['contact_email', 'user_email', 'member_email'],
         'name': ['full_name', 'display_name', 'username'],
         'signup_date': ['registration_date', 'join_date', 'created_date']
     },
@@ -26,6 +38,41 @@ COLUMN_VARIANTS = {
         'amount': ['total', 'price', 'cost'],
         'product': ['item', 'sku', 'product_name'],
         'order_date': ['purchase_date', 'transaction_date', 'sale_date']
+    },
+    'posts': {
+        'user_id': ['author_id', 'creator_id', 'poster_id'],
+        'title': ['subject', 'heading', 'topic'],
+        'content': ['body', 'text', 'message'],
+        'likes': ['reactions', 'votes', 'favorites'],
+        'created_at': ['posted_at', 'published_at', 'timestamp']
+    },
+    'comments': {
+        'post_id': ['article_id', 'message_id', 'update_id'],
+        'user_id': ['author_id', 'commenter_id', 'responder_id'],
+        'text': ['content', 'body', 'message'],
+        'created_at': ['posted_at', 'timestamp', 'comment_date']
+    },
+    'employees': {
+        'manager_id': ['supervisor_id', 'boss_id', 'lead_id'],
+        'department': ['division', 'team', 'unit'],
+        'salary': ['compensation', 'pay', 'wage'],
+        'hire_date': ['start_date', 'join_date', 'employment_date']
+    },
+    'events': {
+        'user_id': ['account_id', 'visitor_id', 'session_user_id'],
+        'event_type': ['action_type', 'activity_type', 'event_name'],
+        'properties': ['metadata', 'attributes', 'data'],
+        'timestamp': ['event_time', 'occurred_at', 'created_at']
+    },
+    'articles': {
+        'author_id': ['writer_id', 'creator_id', 'publisher_id'],
+        'title': ['heading', 'subject', 'name'],
+        'content': ['body', 'text', 'description'],
+        'views': ['reads', 'visits', 'impressions'],
+        'published_at': ['created_at', 'posted_at', 'release_date']
+    },
+    'tags': {
+        'name': ['label', 'category', 'topic']
     }
 }
 

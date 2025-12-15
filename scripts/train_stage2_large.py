@@ -18,7 +18,7 @@ if __name__ == "__main__":
     optimizer, metrics = run_stage2_training(
         num_iterations=800,
         candidates_per_iteration=5,
-        reward_threshold=0.5,
+        reward_threshold=0.25,  # Updated to accept realistic 2x+ speedups
         num_runs=3,
         timeout_seconds=10,
         output_dir="data/stage2"

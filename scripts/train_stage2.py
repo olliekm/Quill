@@ -35,7 +35,7 @@ def run_stage2_training(
 
     optimizer = ReSTEMOptimizerV2(
         test_db_path="data/test.db",
-        seed_data_path="data/seed_data.json",
+        seed_data_path="data/seed_data_multi_schema.json",
         reward_threshold=reward_threshold
     )
 

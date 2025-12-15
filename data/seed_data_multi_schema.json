@@ -1,0 +1,92 @@
+[
+  {
+    "id": 1,
+    "description": "Missing index on users.age filter",
+    "schema": "\nCREATE TABLE users (\n    id INTEGER PRIMARY KEY,\n    name TEXT,\n    email TEXT,\n    age INTEGER,\n    city TEXT,\n    signup_date TEXT\n);\n",
+    "slow_query": "SELECT * FROM users WHERE age > 30;",
+    "fast_query": "\nCREATE INDEX IF NOT EXISTS idx_users_age ON users(age);\nSELECT * FROM users WHERE age > 30;\n",
+    "explanation": "Index on age column speeds up WHERE filtering",
+    "optimization_type": "indexing"
+  },
+  {
+    "id": 2,
+    "description": "Correlated subquery to find users with high-value orders",
+    "schema": "\nCREATE TABLE users (\n    id INTEGER PRIMARY KEY,\n    name TEXT,\n    email TEXT,\n    age INTEGER,\n    city TEXT,\n    signup_date TEXT\n);\n\nCREATE TABLE orders (\n    id INTEGER PRIMARY KEY,\n    user_id INTEGER,\n    product TEXT,\n    amount REAL,\n    order_date TEXT\n);\n",
+    "slow_query": "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE amount > 100);",
+    "fast_query": "\nCREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);\nCREATE INDEX IF NOT EXISTS idx_orders_amount ON orders(amount);\nSELECT DISTINCT u.* FROM users u JOIN orders o ON u.id = o.user_id WHERE o.amount > 100;\n",
+    "explanation": "Replace correlated subquery with indexed JOIN",
+    "optimization_type": "join"
+  },
+  {
+    "id": 10,
+    "description": "Find posts with comment counts (subquery aggregation)",
+    "schema": "\nCREATE TABLE posts (\n    id INTEGER PRIMARY KEY,\n    user_id INTEGER,\n    title TEXT,\n    content TEXT,\n    likes INTEGER,\n    created_at TEXT\n);\n\nCREATE TABLE comments (\n    id INTEGER PRIMARY KEY,\n    post_id INTEGER,\n    user_id INTEGER,\n    text TEXT,\n    created_at TEXT\n);\n",
+    "slow_query": "SELECT *, (SELECT COUNT(*) FROM comments WHERE post_id = posts.id) as comment_count FROM posts;",
+    "fast_query": "\nCREATE INDEX IF NOT EXISTS idx_comments_post_id ON comments(post_id);\nSELECT p.*, COUNT(c.id) as comment_count\nFROM posts p\nLEFT JOIN comments c ON p.id = c.post_id\nGROUP BY p.id;\n",
+    "explanation": "Replace correlated subquery with indexed JOIN and GROUP BY",
+    "optimization_type": "join"
+  },
+  {
+    "id": 11,
+    "description": "Missing index on popular posts filter",
+    "schema": "\nCREATE TABLE posts (\n    id INTEGER PRIMARY KEY,\n    user_id INTEGER,\n    title TEXT,\n    content TEXT,\n    likes INTEGER,\n    created_at TEXT\n);\n",
+    "slow_query": "SELECT * FROM posts WHERE likes > 100 ORDER BY likes DESC LIMIT 10;",
+    "fast_query": "\nCREATE INDEX IF NOT EXISTS idx_posts_likes ON posts(likes DESC);\nSELECT * FROM posts WHERE likes > 100 ORDER BY likes DESC LIMIT 10;\n",
+    "explanation": "Index on likes column speeds up filtering and sorting",
+    "optimization_type": "indexing"
+  },
+  {
+    "id": 20,
+    "description": "Find employees and their managers (self-join)",
+    "schema": "\nCREATE TABLE employees (\n    id INTEGER PRIMARY KEY,\n    name TEXT,\n    email TEXT,\n    manager_id INTEGER,\n    department TEXT,\n    salary REAL,\n    hire_date TEXT\n);\n",
+    "slow_query": "SELECT e.*, (SELECT name FROM employees WHERE id = e.manager_id) as manager_name FROM employees e;",
+    "fast_query": "\nCREATE INDEX IF NOT EXISTS idx_employees_manager_id ON employees(manager_id);\nSELECT e.*, m.name as manager_name\nFROM employees e\nLEFT JOIN employees m ON e.manager_id = m.id;\n",
+    "explanation": "Replace correlated subquery with self-join",
+    "optimization_type": "join"
+  },
+  {
+    "id": 21,
+    "description": "Filter employees by department without index",
+    "schema": "\nCREATE TABLE employees (\n    id INTEGER PRIMARY KEY,\n    name TEXT,\n    email TEXT,\n    manager_id INTEGER,\n    department TEXT,\n    salary REAL,\n    hire_date TEXT\n);\n",
+    "slow_query": "SELECT * FROM employees WHERE department = 'Engineering' AND salary > 100000;",
+    "fast_query": "\nCREATE INDEX IF NOT EXISTS idx_employees_dept_salary ON employees(department, salary);\nSELECT * FROM employees WHERE department = 'Engineering' AND salary > 100000;\n",
+    "explanation": "Composite index on department and salary speeds up multi-column filtering",
+    "optimization_type": "indexing"
+  },
+  {
+    "id": 30,
+    "description": "Count events by type without index",
+    "schema": "\nCREATE TABLE events (\n    id INTEGER PRIMARY KEY,\n    user_id INTEGER,\n    event_type TEXT,\n    properties TEXT,\n    timestamp TEXT\n);\n",
+    "slow_query": "SELECT event_type, COUNT(*) as count FROM events GROUP BY event_type;",
+    "fast_query": "\nCREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);\nSELECT event_type, COUNT(*) as count FROM events GROUP BY event_type;\n",
+    "explanation": "Index on event_type speeds up GROUP BY aggregation",
+    "optimization_type": "indexing"
+  },
+  {
+    "id": 31,
+    "description": "Find users with recent activity (time-based filter)",
+    "schema": "\nCREATE TABLE events (\n    id INTEGER PRIMARY KEY,\n    user_id INTEGER,\n    event_type TEXT,\n    properties TEXT,\n    timestamp TEXT\n);\n",
+    "slow_query": "SELECT DISTINCT user_id FROM events WHERE timestamp > '2024-12-01' AND event_type = 'purchase';",
+    "fast_query": "\nCREATE INDEX IF NOT EXISTS idx_events_type_time ON events(event_type, timestamp);\nSELECT DISTINCT user_id FROM events WHERE event_type = 'purchase' AND timestamp > '2024-12-01';\n",
+    "explanation": "Composite index on event_type and timestamp with optimized WHERE clause order",
+    "optimization_type": "indexing"
+  },
+  {
+    "id": 40,
+    "description": "Find articles by tag without index",
+    "schema": "\nCREATE TABLE articles (\n    id INTEGER PRIMARY KEY,\n    author_id INTEGER,\n    title TEXT,\n    content TEXT,\n    views INTEGER,\n    published_at TEXT\n);\n\nCREATE TABLE tags (\n    id INTEGER PRIMARY KEY,\n    name TEXT UNIQUE\n);\n\nCREATE TABLE article_tags (\n    article_id INTEGER,\n    tag_id INTEGER,\n    PRIMARY KEY (article_id, tag_id)\n);\n",
+    "slow_query": "SELECT a.* FROM articles a WHERE a.id IN (SELECT article_id FROM article_tags WHERE tag_id = 5);",
+    "fast_query": "\nCREATE INDEX IF NOT EXISTS idx_article_tags_tag ON article_tags(tag_id);\nSELECT DISTINCT a.* FROM articles a\nJOIN article_tags at ON a.id = at.article_id\nWHERE at.tag_id = 5;\n",
+    "explanation": "Replace IN subquery with indexed JOIN for many-to-many relationship",
+    "optimization_type": "join"
+  },
+  {
+    "id": 41,
+    "description": "Find popular articles with unnecessary SELECT *",
+    "schema": "\nCREATE TABLE articles (\n    id INTEGER PRIMARY KEY,\n    author_id INTEGER,\n    title TEXT,\n    content TEXT,\n    views INTEGER,\n    published_at TEXT\n);\n",
+    "slow_query": "SELECT * FROM articles WHERE views > 1000 ORDER BY views DESC LIMIT 10;",
+    "fast_query": "\nCREATE INDEX IF NOT EXISTS idx_articles_views ON articles(views DESC);\nSELECT id, title, views FROM articles WHERE views > 1000 ORDER BY views DESC LIMIT 10;\n",
+    "explanation": "Index on views and select only needed columns instead of SELECT *",
+    "optimization_type": "projection"
+  }
+]
